@@ -45,12 +45,18 @@ async function askModel(messages: Message[]): Promise<ChatResponse> {
 async function chat(userInput: string, messages: Message[]): Promise<void> {
   messages.push({role: "user", content: userInput});
   for (let step = 0; step < 5; step++) {
-    const data = await askModel(messages);
+    let data: ChatResponse;
+    try {
+      data = await askModel(messages);
+    } catch (error) {
+      messages.pop();
+      throw new Error(`Ollama request failed: ${error}`);
+    }
     const assistantMessage = data.message;
 
     messages.push(assistantMessage);
     const toolCalls = assistantMessage.tool_calls ?? [];
-    console.log("toolCalls: ", toolCalls.length)
+
     if (toolCalls.length === 0) {
       console.log("\nAssistant:", assistantMessage.content);
       return;
@@ -61,6 +67,9 @@ async function chat(userInput: string, messages: Message[]): Promise<void> {
       const args = call.function.arguments;
 
       const handler = toolHandlers[name];
+      if (!handler) {
+        throw new Error(`Tool not found: ${name}`);
+      }
 
       console.log(`Executing tool: ${name} with args:`, args);
       const result = handler(args);
@@ -72,7 +81,11 @@ async function chat(userInput: string, messages: Message[]): Promise<void> {
       });
     }
   }
-  console.log("Stopped: maximum tool-loop steps reached.");
+  messages.push({
+    role: "assistant",
+    content: `Stopped: maximum tool-loop steps reached without success when user asked "${userInput}".`
+  });
+  console.log("\nAssistant: Sorry, I couldn't answer that.");
 }
 
 async function main(): Promise<void> {
