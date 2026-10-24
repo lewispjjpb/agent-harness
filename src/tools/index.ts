@@ -1,6 +1,8 @@
 import type { Tool } from "ollama";
 import { multiply } from "./math-tools";
 import { getCurrentTime } from "./time-tools";
+import {CurrentWeather, getWeather} from "./weather-tools";
+import {WttrType} from "../types/wttr-response";
 
 export const toolDefinitions: Tool[] = [
   {
@@ -30,10 +32,24 @@ export const toolDefinitions: Tool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "getWeather",
+      description: "Get the current weather in a given city.  Data is returned as a JSON object.",
+      parameters: {
+        type: "object",
+        properties: {
+          city: { type: "string", description: "City name" },
+        },
+        required: ["city"],
+      }
+    }
+  }
 ];
 
 type ToolArgs = Record<string, unknown>;
-type ToolHandler = (args: ToolArgs) => unknown;
+type ToolHandler = (args: ToolArgs) => unknown | Promise<unknown>;
 
 export const toolHandlers: Record<string, ToolHandler> = {
   multiply: (args) => {
@@ -48,6 +64,12 @@ export const toolHandlers: Record<string, ToolHandler> = {
 
     return multiply(args.a, args.b);
   },
-
   getCurrentTime: () => getCurrentTime(),
+  getWeather: async (args:ToolArgs) => {
+    if (typeof args.city !== "string") {
+      throw new Error("Invalid arguments for getWeather");
+    }
+    const weather:CurrentWeather =  await getWeather(args.city)
+    return weather;
+  },
 };

@@ -1,7 +1,7 @@
 import * as readline from "node:readline/promises";
 import {stdin as input, stdout as output} from "node:process";
 import {toolDefinitions, toolHandlers} from "./tools";
-import {ChatResponse, Message, Tool} from 'ollama';
+import {ChatResponse, Message, ToolCall} from 'ollama';
 
 require('dotenv').config()
 
@@ -20,7 +20,7 @@ if (!OLLAMA_URL || !OLLAMA_CHAT_ENDPOINT || !MODEL) {
 
 const systemMessage: Message = {
   role: "system",
-  content: "You are a helpful assistant teaching me about AI engineering.  Use the tools object which contains many different tools (like)  to perform requests if needed.  Never use emojis in your responses.",
+  content: "You are a helpful assistant teaching me about AI engineering.  Use the tools object which contains many different tools to perform requests if needed.  Never use emojis in your responses.",
 };
 
 async function askModel(messages: Message[]): Promise<ChatResponse> {
@@ -39,17 +39,26 @@ async function askModel(messages: Message[]): Promise<ChatResponse> {
     throw new Error(`Ollama returned HTTP ${response.status}`);
   }
 
+  /**
+   * Uncomment this to see the raw response from Ollama.
+   */
+  // const data: ChatResponse = await response.json();
+  // console.dir(data, { depth: null });
+  // return data;
+
   return response.json();
 }
 
 async function chat(userInput: string, messages: Message[]): Promise<void> {
-  messages.push({role: "user", content: userInput});
+  messages.push({
+    role: "user",
+    content: userInput,
+  });
   for (let step = 0; step < 5; step++) {
     let data: ChatResponse;
     try {
       data = await askModel(messages);
     } catch (error) {
-      messages.pop();
       throw new Error(`Ollama request failed: ${error}`);
     }
     const assistantMessage = data.message;
@@ -63,29 +72,44 @@ async function chat(userInput: string, messages: Message[]): Promise<void> {
     }
 
     for (const call of toolCalls) {
-      const name = call.function.name;
-      const args = call.function.arguments;
+      await processToolCall(call, messages);
+    }
+  }
+  console.log("\nAssistant: Sorry, I couldn't answer that.");
+}
 
-      const handler = toolHandlers[name];
-      if (!handler) {
-        throw new Error(`Tool not found: ${name}`);
-      }
+async function processToolCall(call: ToolCall, messages: Message[]) {
+  const name = call.function.name;
+  const args = call.function.arguments;
 
-      console.log(`Executing tool: ${name} with args:`, args);
-      const result = handler(args);
+  const handler = toolHandlers[name];
+  if (!handler) {
+    messages.push({
+      role: "assistant",
+      content: `Sorry, I don't know how to execute the tool "${name}".`,
+    })
+  } else {
+    try {
+      const result = await handler(args);
 
       messages.push({
         role: "tool",
-        content: String(result),
+        content: typeof result === "string"
+          ? result
+          : JSON.stringify(result),
+        tool_name: name,
+      });
+    } catch (error) {
+      console.error(`Error executing tool ${name}:`, error);
+      messages.push({
+        role: "tool",
+        content: error instanceof Error
+          ? JSON.stringify(error.message)
+          : "Tool execution failed",
         tool_name: name,
       });
     }
   }
-  messages.push({
-    role: "assistant",
-    content: `Stopped: maximum tool-loop steps reached without success when user asked "${userInput}".`
-  });
-  console.log("\nAssistant: Sorry, I couldn't answer that.");
 }
 
 async function main(): Promise<void> {
