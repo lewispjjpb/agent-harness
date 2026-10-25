@@ -2,6 +2,8 @@ import * as readline from "node:readline/promises";
 import {stdin as input, stdout as output} from "node:process";
 import {toolDefinitions, toolHandlers} from "./tools";
 import {ChatResponse, Message, ToolCall} from 'ollama';
+import {ModelTarget} from "./types/model-definitions";
+import {generalAssistantPrompt, codeReviewerPrompt} from "./utils/app-constants";
 
 require('dotenv').config()
 
@@ -12,23 +14,28 @@ require('dotenv').config()
 
 const OLLAMA_URL = process.env.OLLAMA_URL;
 const OLLAMA_CHAT_ENDPOINT = process.env.OLLAMA_CHAT_ENDPOINT;
-const MODEL = process.env.MODEL;
+const QWEN_MODEL = process.env.QWEN_MODEL;
 
-if (!OLLAMA_URL || !OLLAMA_CHAT_ENDPOINT || !MODEL) {
-  throw new Error("Missing required Ollama configuration in .env");
+if (!OLLAMA_URL || !OLLAMA_CHAT_ENDPOINT || !QWEN_MODEL) {
+  throw new Error("Missing environment variables");
 }
 
-const systemMessage: Message = {
-  role: "system",
-  content: "You are a helpful assistant teaching me about AI engineering.  Use the tools object which contains many different tools to perform requests if needed.  Never use emojis in your responses.",
+const windowsModel: ModelTarget = {
+  name: "windows",
+  url: `${OLLAMA_URL}/${OLLAMA_CHAT_ENDPOINT}`,
+  model: QWEN_MODEL,
 };
 
-async function askModel(messages: Message[]): Promise<ChatResponse> {
-  const response = await fetch(`${OLLAMA_URL}/${OLLAMA_CHAT_ENDPOINT}`, {
+function selectModel(): ModelTarget {
+  return windowsModel;
+}
+
+async function askModel(messages: Message[], targetModel: ModelTarget): Promise<ChatResponse> {
+  const response = await fetch(targetModel.url, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      model: MODEL,
+      model: targetModel.model,
       messages,
       tools: toolDefinitions,
       stream: false,
@@ -57,7 +64,7 @@ async function chat(userInput: string, messages: Message[]): Promise<void> {
   for (let step = 0; step < 5; step++) {
     let data: ChatResponse;
     try {
-      data = await askModel(messages);
+      data = await askModel(messages, selectModel());
     } catch (error) {
       throw new Error(`Ollama request failed: ${error}`);
     }
@@ -85,8 +92,8 @@ async function processToolCall(call: ToolCall, messages: Message[]) {
   const handler = toolHandlers[name];
   if (!handler) {
     messages.push({
-      role: "assistant",
-      content: `Sorry, I don't know how to execute the tool "${name}".`,
+      role: "tool",
+      content: `Unable to process tool call: ${name} with args: ${JSON.stringify(args)}`,
     })
   } else {
     try {
@@ -104,7 +111,7 @@ async function processToolCall(call: ToolCall, messages: Message[]) {
       messages.push({
         role: "tool",
         content: error instanceof Error
-          ? JSON.stringify(error.message)
+          ? error.message
           : "Tool execution failed",
         tool_name: name,
       });
@@ -112,13 +119,20 @@ async function processToolCall(call: ToolCall, messages: Message[]) {
   }
 }
 
+function createConversation(prompt: string): Message[] {
+  return [
+    {
+      role: "system",
+      content: prompt,
+    }
+  ]
+}
+
 async function main(): Promise<void> {
   const rl = readline.createInterface({input, output});
 
   console.log("Local AI chat. Type 'exit' to quit.\n");
-  const messages: Message[] = [
-    systemMessage,
-  ];
+  const messages: Message[] = createConversation(generalAssistantPrompt)
 
   try {
     while (true) {

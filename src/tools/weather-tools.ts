@@ -21,7 +21,7 @@ export const getWeather = async (
 
   const data = await response.json();
 
-  const current:WttrType["current_condition"][0] = data.current_condition[0];
+  const current: WttrType["current_condition"][0] = data.current_condition[0];
 
   return {
     city,

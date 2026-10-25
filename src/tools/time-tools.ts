@@ -1,3 +1,3 @@
-export function getCurrentTime(): string {
-  return Date.now().toLocaleString();
+export function getCurrentTime(): number {
+  return Date.now();
 }
