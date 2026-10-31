@@ -3,3 +3,5 @@ export type ModelTarget = {
   url: string;
   model: string;
 };
+
+export type ModelTask = "general" | "code";
