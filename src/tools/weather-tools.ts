@@ -5,6 +5,7 @@ export type CurrentWeather = {
   temperatureC: string;
   temperatureF: string;
   feelsLikeC: string;
+  feelsLikeF: string;
   conditions: string;
   humidity: string;
   windSpeedKmph: string;
@@ -28,6 +29,7 @@ export const getWeather = async (
     temperatureC: current.temp_C,
     temperatureF: current.temp_F,
     feelsLikeC: current.FeelsLikeC,
+    feelsLikeF: current.FeelsLikeF,
     conditions: current.weatherDesc[0].value,
     humidity: current.humidity,
     windSpeedKmph: current.windspeedKmph,

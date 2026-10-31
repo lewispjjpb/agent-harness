@@ -11,39 +11,39 @@ require('dotenv').config()
  * model → tool request → execution → result → model cycle is
  * the core of a tool-using agent.
  */
-
-const WINDOWS_OLLAMA_URL = process.env.WINDOWS_OLLAMA_URL;
-const MAC_OLLAMA_URL = process.env.MAC_OLLAMA_URL;
-const WINDOWS_QWEN_MODEL = process.env.WINDOWS_QWEN_MODEL;
-const MAC_GEMMA_MODEL = process.env.MAC_GEMMA_MODEL;
-const OLLAMA_CHAT_ENDPOINT = process.env.OLLAMA_CHAT_ENDPOINT;
-const OLLAMA_TAGS_ENDPOINT = process.env.OLLAMA_TAGS_ENDPOINT;
+//
+const PRIMARY_MODEL_URL = process.env.PRIMARY_MODEL_URL;
+const SUPPORT_MODEL_URL = process.env.SUPPORT_MODEL_URL;
+const PRIMARY_MODEL = process.env.PRIMARY_MODEL;
+const SUPPORT_MODEL = process.env.SUPPORT_MODEL;
+const CHAT_ENDPOINT = process.env.CHAT_ENDPOINT;
+const TAGS_ENDPOINT = process.env.TAGS_ENDPOINT;
 
 if (
-  !WINDOWS_OLLAMA_URL ||
-  !MAC_OLLAMA_URL ||
-  !OLLAMA_CHAT_ENDPOINT ||
-  !OLLAMA_TAGS_ENDPOINT ||
-  !WINDOWS_QWEN_MODEL ||
-  !MAC_GEMMA_MODEL
+  !PRIMARY_MODEL_URL ||
+  !SUPPORT_MODEL_URL ||
+  !CHAT_ENDPOINT ||
+  !TAGS_ENDPOINT ||
+  !PRIMARY_MODEL ||
+  !SUPPORT_MODEL
 ) {
   throw new Error('Missing environment variables');
 }
 
-const macModel: ModelTarget = {
+const primaryModel: ModelTarget = {
   name: 'mac',
-  baseUrl: MAC_OLLAMA_URL,
-  model: MAC_GEMMA_MODEL,
-  tagsEndpoint: OLLAMA_TAGS_ENDPOINT,
-  chatEndpoint: OLLAMA_CHAT_ENDPOINT,
+  baseUrl: SUPPORT_MODEL_URL,
+  model: SUPPORT_MODEL,
+  tagsEndpoint: TAGS_ENDPOINT,
+  chatEndpoint: CHAT_ENDPOINT,
 };
 
-const windowsModel: ModelTarget = {
+const supportModel: ModelTarget = {
   name: 'windows',
-  baseUrl: WINDOWS_OLLAMA_URL,
-  model: WINDOWS_QWEN_MODEL,
-  tagsEndpoint: OLLAMA_TAGS_ENDPOINT,
-  chatEndpoint: OLLAMA_CHAT_ENDPOINT,
+  baseUrl: PRIMARY_MODEL_URL,
+  model: PRIMARY_MODEL,
+  tagsEndpoint: TAGS_ENDPOINT,
+  chatEndpoint: CHAT_ENDPOINT,
 };
 
 async function isModelAvailable(target: ModelTarget): Promise<boolean> {
@@ -71,9 +71,9 @@ async function resolveModel(task: ModelTask): Promise<ModelTarget> {
   }
 
   // Mac is our fallback for requests preferred on Windows.
-  if (preferredModel.name !== macModel.name && await isModelAvailable(macModel)) {
+  if (preferredModel.name !== primaryModel.name && await isModelAvailable(primaryModel)) {
     console.log('Preferred model unavailable. Falling back to Mac.');
-    return macModel;
+    return primaryModel;
   }
 
   throw new Error(
@@ -84,10 +84,10 @@ async function resolveModel(task: ModelTask): Promise<ModelTarget> {
 function selectModel(task: ModelTask): ModelTarget {
   switch (task) {
     case 'code':
-      return windowsModel;
+      return supportModel;
     case 'general':
     default:
-      return macModel;
+      return primaryModel;
   }
 }
 
