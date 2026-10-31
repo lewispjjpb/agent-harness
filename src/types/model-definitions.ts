@@ -1,7 +1,15 @@
 export type ModelTarget = {
   name: string;
-  url: string;
+  baseUrl: string;
   model: string;
+  tagsEndpoint?: string;
+  chatEndpoint?: string;
 };
 
-export type ModelTask = "general" | "code";
+export type ModelTask = 'code' | 'general';
+
+export type OllamaTagsResponse = {
+  models: {
+    name: string;
+  }[];
+};

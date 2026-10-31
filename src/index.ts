@@ -2,7 +2,7 @@ import * as readline from 'node:readline/promises';
 import {stdin as input, stdout as output} from 'node:process';
 import {toolDefinitions, toolHandlers} from './tools';
 import {ChatResponse, Message, ToolCall} from 'ollama';
-import {ModelTarget, ModelTask} from './types/model-definitions';
+import {ModelTarget, ModelTask, OllamaTagsResponse} from './types/model-definitions';
 import {GENERAL_ASSISTANT_PROMPT, MAX_MODEL_ITERATIONS} from './utils/app-constants';
 
 require('dotenv').config()
@@ -12,32 +12,87 @@ require('dotenv').config()
  * the core of a tool-using agent.
  */
 
-const OLLAMA_URL = process.env.OLLAMA_URL;
+const WINDOWS_OLLAMA_URL = process.env.WINDOWS_OLLAMA_URL;
+const MAC_OLLAMA_URL = process.env.MAC_OLLAMA_URL;
+const WINDOWS_QWEN_MODEL = process.env.WINDOWS_QWEN_MODEL;
+const MAC_GEMMA_MODEL = process.env.MAC_GEMMA_MODEL;
 const OLLAMA_CHAT_ENDPOINT = process.env.OLLAMA_CHAT_ENDPOINT;
-const QWEN_MODEL = process.env.QWEN_MODEL;
+const OLLAMA_TAGS_ENDPOINT = process.env.OLLAMA_TAGS_ENDPOINT;
 
-if (!OLLAMA_URL || !OLLAMA_CHAT_ENDPOINT || !QWEN_MODEL) {
+if (
+  !WINDOWS_OLLAMA_URL ||
+  !MAC_OLLAMA_URL ||
+  !OLLAMA_CHAT_ENDPOINT ||
+  !OLLAMA_TAGS_ENDPOINT ||
+  !WINDOWS_QWEN_MODEL ||
+  !MAC_GEMMA_MODEL
+) {
   throw new Error('Missing environment variables');
 }
 
-const windowsModel: ModelTarget = {
-  name: 'windows',
-  url: `${OLLAMA_URL}/${OLLAMA_CHAT_ENDPOINT}`,
-  model: QWEN_MODEL,
+const macModel: ModelTarget = {
+  name: 'mac',
+  baseUrl: MAC_OLLAMA_URL,
+  model: MAC_GEMMA_MODEL,
+  tagsEndpoint: OLLAMA_TAGS_ENDPOINT,
+  chatEndpoint: OLLAMA_CHAT_ENDPOINT,
 };
 
-function selectModel(task: ModelTask = 'general'): ModelTarget {
-  switch (task) {
-    case 'general':
-      return windowsModel;
+const windowsModel: ModelTarget = {
+  name: 'windows',
+  baseUrl: WINDOWS_OLLAMA_URL,
+  model: WINDOWS_QWEN_MODEL,
+  tagsEndpoint: OLLAMA_TAGS_ENDPOINT,
+  chatEndpoint: OLLAMA_CHAT_ENDPOINT,
+};
 
+async function isModelAvailable(target: ModelTarget): Promise<boolean> {
+  try {
+    const response = await fetch(`${target.baseUrl}/${target.tagsEndpoint}`);
+    if (!response.ok) {
+      return false;
+    }
+    const data: OllamaTagsResponse = await response.json();
+    return data.models.some(model => model.name === target.model);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Selects the model to use based on the task type,
+ * falling back to the Mac model if the preferred model is unavailable.
+ */
+async function resolveModel(task: ModelTask): Promise<ModelTarget> {
+  const preferredModel = selectModel(task);
+  if (await isModelAvailable(preferredModel)) {
+    console.log(`Preferred model available: ${preferredModel.name}`);
+    return preferredModel;
+  }
+
+  // Mac is our fallback for requests preferred on Windows.
+  if (preferredModel.name !== macModel.name && await isModelAvailable(macModel)) {
+    console.log('Preferred model unavailable. Falling back to Mac.');
+    return macModel;
+  }
+
+  throw new Error(
+    `Neither the preferred model (${preferredModel.name}) nor the Mac fallback is available.`
+  );
+}
+
+function selectModel(task: ModelTask): ModelTarget {
+  switch (task) {
     case 'code':
       return windowsModel;
+    case 'general':
+    default:
+      return macModel;
   }
 }
 
 async function askModel(messages: Message[], targetModel: ModelTarget): Promise<ChatResponse> {
-  const response = await fetch(targetModel.url, {
+  const response = await fetch(`${targetModel.baseUrl}/${targetModel.chatEndpoint}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
@@ -49,8 +104,9 @@ async function askModel(messages: Message[], targetModel: ModelTarget): Promise<
   });
 
   if (!response.ok) {
-    throw new Error(`Ollama returned HTTP ${response.status}`);
-  }
+    throw new Error(
+      `Request to ${targetModel.name} model failed: ${response.status} ${response.statusText}`
+    );  }
 
   /**
    * Uncomment this to see the raw response from Ollama.
@@ -62,13 +118,24 @@ async function askModel(messages: Message[], targetModel: ModelTarget): Promise<
   return response.json();
 }
 
+const codeKeyWords = ['code', 'typescript', 'javascript', 'function', 'debug', 'bug', 'programming', 'error', 'fix', 'bugfix',];
+const regexPunctuationReplace = /[^\w\s]/g;
+
+function determineTaskType(prompt: string): ModelTask {
+  const words = prompt.toLowerCase().replace(regexPunctuationReplace, '').split(/\s+/);
+  if (words.some(word => codeKeyWords.includes(word))) {
+    return 'code';
+  }
+  return 'general';
+}
+
 async function chat(userInput: string, messages: Message[]): Promise<void> {
   messages.push({
     role: 'user',
     content: userInput,
   });
   try {
-    const response = await runAgent(messages);
+    const response = await runAgent(messages, determineTaskType(userInput));
     console.log(`\nAssistant: ${response}`);
     return;
   } catch (error) {
@@ -77,9 +144,11 @@ async function chat(userInput: string, messages: Message[]): Promise<void> {
   console.log('\nAssistant: Sorry, I couldn\'t answer that.');
 }
 
-async function runAgent(messages: Message[]): Promise<string> {
+async function runAgent(messages: Message[], task: ModelTask): Promise<string> {
+  const model = await resolveModel(task);
+  console.log(`Selected model target: ${model.name}`);
   for (let modelIteration = 0; modelIteration < MAX_MODEL_ITERATIONS; modelIteration++) {
-    const data = await askModel(messages, selectModel());
+    const data = await askModel(messages, model);
     const assistantMessage = data.message;
     messages.push(assistantMessage);
 
@@ -96,7 +165,7 @@ async function runAgent(messages: Message[]): Promise<string> {
   return 'Sorry, I couldn\'t complete the request within the iteration limit.';
 }
 
-async function processToolCall(call: ToolCall, messages: Message[]):Promise<void> {
+async function processToolCall(call: ToolCall, messages: Message[]): Promise<void> {
   const name = call.function.name;
   const args = call.function.arguments;
 
