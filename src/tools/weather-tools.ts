@@ -3,6 +3,7 @@ import {WttrType} from "../types/wttr-response";
 export type CurrentWeather = {
   city: string;
   temperatureC: string;
+  temperatureF: string;
   feelsLikeC: string;
   conditions: string;
   humidity: string;
@@ -14,7 +15,6 @@ export const getWeather = async (
 ): Promise<CurrentWeather> => {
   const url = `https://wttr.in/${encodeURIComponent(city)}?format=j1`;
   const response = await fetch(url);
-
   if (!response.ok) {
     throw new Error(`Weather API returned HTTP ${response.status}`);
   }
@@ -26,6 +26,7 @@ export const getWeather = async (
   return {
     city,
     temperatureC: current.temp_C,
+    temperatureF: current.temp_F,
     feelsLikeC: current.FeelsLikeC,
     conditions: current.weatherDesc[0].value,
     humidity: current.humidity,
