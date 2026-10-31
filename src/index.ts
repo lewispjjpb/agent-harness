@@ -106,7 +106,8 @@ async function askModel(messages: Message[], targetModel: ModelTarget): Promise<
   if (!response.ok) {
     throw new Error(
       `Request to ${targetModel.name} model failed: ${response.status} ${response.statusText}`
-    );  }
+    );
+  }
 
   /**
    * Uncomment this to see the raw response from Ollama.
@@ -136,7 +137,7 @@ async function chat(userInput: string, messages: Message[]): Promise<void> {
   });
   try {
     const response = await runAgent(messages, determineTaskType(userInput));
-    console.log(`\nAssistant: ${response}`);
+    console.log(`\nAssistant: ${response}\n********END OF LINE, NERD********\n`);
     return;
   } catch (error) {
     console.error(`Agent run failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
