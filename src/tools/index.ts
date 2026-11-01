@@ -1,8 +1,7 @@
-import type { Tool } from "ollama";
-import { multiply } from "./math-tools";
-import { getCurrentTime } from "./time-tools";
+import type {Tool} from "ollama";
+import {multiply} from "./math-tools";
+import {getCurrentTime} from "./time-tools";
 import {CurrentWeather, getWeather} from "./weather-tools";
-import {WttrType} from "../types/wttr-response";
 
 export const toolDefinitions: Tool[] = [
   {
@@ -13,8 +12,8 @@ export const toolDefinitions: Tool[] = [
       parameters: {
         type: "object",
         properties: {
-          a: { type: "number", description: "First number" },
-          b: { type: "number", description: "Second number" },
+          a: {type: "number", description: "First number"},
+          b: {type: "number", description: "Second number"},
         },
         required: ["a", "b"],
       },
@@ -40,7 +39,7 @@ export const toolDefinitions: Tool[] = [
       parameters: {
         type: "object",
         properties: {
-          city: { type: "string", description: "City name" },
+          city: {type: "string", description: "City name"},
         },
         required: ["city"],
       }
@@ -65,11 +64,11 @@ export const toolHandlers: Record<string, ToolHandler> = {
     return multiply(args.a, args.b);
   },
   getCurrentTime: () => getCurrentTime(),
-  getWeather: async (args:ToolArgs) => {
+  getWeather: async (args: ToolArgs) => {
     if (typeof args.city !== "string") {
       throw new Error("Invalid arguments for getWeather");
     }
-    const weather:CurrentWeather =  await getWeather(args.city)
+    const weather: CurrentWeather = await getWeather(args.city)
     return weather;
   },
 };

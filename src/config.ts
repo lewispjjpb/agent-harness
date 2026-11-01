@@ -1,4 +1,5 @@
 import {ModelTarget} from "./types/model-definitions";
+
 require('dotenv').config()
 
 /**
@@ -25,17 +26,17 @@ if (
 }
 
 export const primaryModel: ModelTarget = {
-  name: 'mac',
-  baseUrl: SUPPORT_MODEL_URL,
-  model: SUPPORT_MODEL,
+  name: 'primary',
+  baseUrl: PRIMARY_MODEL_URL,
+  model: PRIMARY_MODEL,
   tagsEndpoint: TAGS_ENDPOINT,
   chatEndpoint: CHAT_ENDPOINT,
 };
 
 export const supportModel: ModelTarget = {
-  name: 'windows',
-  baseUrl: PRIMARY_MODEL_URL,
-  model: PRIMARY_MODEL,
+  name: 'support',
+  baseUrl: SUPPORT_MODEL_URL,
+  model: SUPPORT_MODEL,
   tagsEndpoint: TAGS_ENDPOINT,
   chatEndpoint: CHAT_ENDPOINT,
 };
