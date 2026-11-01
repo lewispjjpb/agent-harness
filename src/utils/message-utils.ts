@@ -12,6 +12,9 @@ export function createConversationMessages(prompt: string): Message[] {
   ]
 }
 
+/**
+ * This is a very silly way to do model selection
+ */
 export function determineTaskType(prompt: string): ModelTask {
   const words = prompt.toLowerCase().replace(regexPunctuationReplace, '').split(/\s+/);
   if (words.some(word => codeKeyWords.includes(word))) {
